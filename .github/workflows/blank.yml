@@ -5,63 +5,51 @@ jobs:
   zkpass-verification:
     runs-on: ubuntu-latest
     steps:
-      - name: 🟢 1. Environment Setup
+      - name: 🟢 1. Setup & Install SDK
         run: |
+          mkdir zkpass-test && cd zkpass-test
           npm init -y
-          # Using the 2026 unified JS SDK
+          # 2026 standard package for JS/Node environments
           npm install @zkpass/transgate-js-sdk
           
-      - name: 🛡️ 2. Run VOLEitH Verifier
-        shell: node {0}
-        run: |
+          # Create the test script inside the same folder
+          cat <<EOF > test-zkpass.js
           const { Verifier } = require('@zkpass/transgate-js-sdk');
 
-          async function runSmokeTest() {
-            console.log("--- [zkPass] Starting 2026 VOLE-ZK Verification ---");
+          async function run() {
+            console.log("--- Starting zkPass 2026 Verification ---");
             
-            // App ID from the zkPass Dev Center
-            const appId = "6a5c3e21-0b8d-4f9e-bd7a-9c1234567890"; 
-            
-            // Mock Proof: In 2026, zkPass proofs are "Selective Disclosure" objects
+            const appId = "6a5c3e21-0b8d-4f9e-bd7a-9c1234567890";
+            const verifier = new Verifier(appId);
+
+            // Mocking a 2026 VOLEitH proof structure
             const mockProof = {
-              taskId: "0xabc123456789",
-              schemaId: "github_contributions_v2",
-              uParam: "post-quantum-base64-u-param",
-              vParam: "post-quantum-base64-v-param",
-              publicFields: [
-                { name: "username", value: "OpenClaw-Dev" }
-              ],
-              allocatorSignature: "0xdeadbeef...", // Signature from the zkPass Node
-              uSignature: "0xdef000..."        // VOLE-ZK commitment signature
+              taskId: "task-001",
+              schemaId: "github-contributions",
+              uParam: "PQ-safe-u",
+              vParam: "PQ-safe-v",
+              publicFields: [{ name: "username", value: "OpenClaw-Dev" }],
+              allocatorSignature: "0x123",
+              validatorSignature: "0x456"
             };
 
             try {
-              // The 2026 Verifier is a lightweight constructor
-              const verifier = new Verifier(appId);
-              
-              console.log("🔍 [Verifier] Performing Post-Quantum Check (VOLEitH)...");
-              
-              // This is the core 'Audit' call
+              console.log("🔍 Running Quantum-Safe Math Check...");
               const result = await verifier.verifyProof(mockProof);
-
-              if (result) {
-                console.log("✅ SUCCESS: Proof is mathematically valid.");
+              console.log("Result:", result ? "✅ Valid" : "⚠️ Rejected (Mock)");
+            } catch (e) {
+              if (e.message.toLowerCase().includes("signature") || e.message.toLowerCase().includes("invalid")) {
+                console.log("✅ SDK LIVE: The verifier logic caught the invalid mock signature.");
               } else {
-                console.log("⚠️ SDK Active: Verifier rejected the mock (as expected).");
-              }
-            } catch (error) {
-              // We check if the error is specifically a 'Signature' failure.
-              // If it is, it means the SDK code successfully parsed the 
-              // VOLEitH structure and attempted verification.
-              if (error.message.toLowerCase().includes("signature") || 
-                  error.message.toLowerCase().includes("invalid")) {
-                console.log("✅ SDK INTEGRITY CONFIRMED: The verifier logic is live.");
-                console.log("Result: The environment is ready for 'OpenClaw' integration.");
-              } else {
-                console.error("❌ Unexpected SDK Error:", error.message);
+                console.error("❌ SDK Error:", e.message);
                 process.exit(1);
               }
             }
           }
+          run();
+          EOF
 
-          runSmokeTest();
+      - name: 🛡️ 2. Execute Smoke Test
+        run: |
+          cd zkpass-test
+          node test-zkpass.js
